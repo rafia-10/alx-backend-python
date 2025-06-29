@@ -1,0 +1,13 @@
+#!/bin/bash
+
+echo "🔥 Starting Minikube cluster..."
+
+minikube start
+
+echo "✅ Checking cluster status..."
+kubectl cluster-info
+
+echo "✅ Getting all pods in all namespaces..."
+kubectl get pods --all-namespaces
+
+echo "✨ All done! Your local K8s cluster should be up & running."
