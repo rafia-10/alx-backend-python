@@ -1,30 +1,31 @@
-from django.shortcuts import render
-from rest_framework import viewsets
-from .models import message, conversation
-from .serializers import ConversationSerializer,MessageSerializer
-from .permissions import IsOwner, IsParticipantOfConversation
+from rest_framework import viewsets, status
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .filters import MessageFilter
-from django_filters.rest_framework import DjangoFilterBackend
-
-    
-
-class ConversationViewSet(viewsets.ModelViewSet):
-    queryset = conversation.objects.all()
-    serializer_class = ConversationSerializer
-
-    def perform_create(self, serializer):
-        conversation = serializer.save()
-        conversation.participants.add(self.request.user)
-
+from rest_framework.exceptions import PermissionDenied
+from .models import Message, Conversation
+from .serializers import MessageSerializer
+from rest_framework.decorators import action
+from rest_framework.status import HTTP_403_FORBIDDEN
 
 class MessageViewSet(viewsets.ModelViewSet):
-    queryset = message.objects.all()
     serializer_class = MessageSerializer
-    pormission_classes = [IsAuthenticated ,IsOwner, IsParticipantOfConversation]
+    permission_classes = [IsAuthenticated]
 
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = MessageFilter
+    def get_queryset(self):
+        conversation_id = self.kwargs.get('conversation_id')
+        user = self.request.user
+
+        # Check if user is part of the conversation
+        if not Conversation.objects.filter(id=conversation_id, participants=user).exists():
+            raise PermissionDenied(detail="You're not part of this conversation", code=HTTP_403_FORBIDDEN)
+
+        return Message.objects.filter(conversation_id=conversation_id)
 
     def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+        conversation_id = self.request.data.get('conversation_id')
+        conversation = Conversation.objects.get(id=conversation_id)
+
+        if self.request.user not in conversation.participants.all():
+            raise PermissionDenied(detail="You're not part of this conversation", code=HTTP_403_FORBIDDEN)
+
+        serializer.save(sender=self.request.user, conversation=conversation)
